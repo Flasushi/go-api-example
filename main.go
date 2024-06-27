@@ -1,16 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"sync"
 )
-
-var db *sql.DB
-var err error
 
 type Item struct {
 	ID    string `json:"id"`
@@ -54,7 +50,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 		saveItems()
 		mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintln(w, "item created: %v", item.ID, item)
+		fmt.Fprintf(w, "item created: %v %v %v", item.ID, item.Name, item.Price)
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		mu.Lock()
@@ -62,7 +58,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 		saveItems()
 		mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
-		fmt.Fprintln(w, "item deleted : %v", id)
+		fmt.Fprintf(w, "item deleted : %v", id)
 	case http.MethodPut:
 		id := r.URL.Query().Get("id")
 		var item Item
@@ -72,7 +68,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 		saveItems()
 		mu.Unlock()
 		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintln(w, "item updated: %v", id, item)
+		fmt.Fprintf(w, "item updated: %v", item.ID, item.Name, item.Price)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -89,7 +85,7 @@ func loadItems() {
 }
 
 func saveItems() {
-	bytes, _ := json.Marshal(items)
+	bytes, err := json.Marshal(items)
 	if err != nil {
 		panic(err)
 	}
@@ -97,7 +93,6 @@ func saveItems() {
 }
 
 func main() {
-	defer db.Close()
 	fmt.Println("sever start....")
 	http.HandleFunc("/items", itemsHandler)
 	http.ListenAndServe(":8080", nil)
