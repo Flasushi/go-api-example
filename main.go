@@ -3,97 +3,120 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
 type Item struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Price int    `json:"price"`
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 var (
-	dataFile = "data.json"
-	items    = make(map[string]Item)
+	jsonfile = "./db/data.json"
+	items    = make(map[int]Item)
 	mu       sync.Mutex
 )
 
-func itemsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
+func getItem(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	defer mu.Unlock()                                  // lock and defer unlock
+	w.Header().Set("Content-Type", "application/json") // set content type
+	var loaditem []Item
+	id, name := extractParams(r) // extract params
+	if items[id] != id {
+		http.Error(w, "Invalid ID", http.StatusBadRequest) // invalid id
+		return
+	} else {
+		json.NewEncoder(w).Encode(loaditem) // encode json
+		return                              // return items
+	}
+}
+
+func deleteItem(w http.ResponseWriter, r *http.Request) {
+	id, name := extractParams(r) // extract id
+	if id != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest) // invalid id
+		return err
+	} else {
 		mu.Lock()
 		defer mu.Unlock()
-		json.NewEncoder(w).Encode(items)
-	} else {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		items = delete(items, id) // delete item
+
+		if file, err := jsonSave(items, Item); err != nil {
+			fmt.Println("file %v", err) // save json file error
+		}
 	}
 }
 
-func itemHandler(w http.ResponseWriter, r *http.Request) {
+func jsonSave(d data, s stract) error {
+	mu.Lock()
+	defer mu.Unlock()
+	err := io.WriteFile(jsonfile, []byte(d), 0644) // write file
+	if err != nil {
+		log.Println("file %v", err) // write file error
+		return error                // return error
+	} else {
+		log.Println("file saved : %v", d) // file saved
+	}
+}
+
+func jsonCreate(dir, stract) (os.File, error) {
+	f, err := os.Open(dir) // open json file
+	if err != nil {
+		fmt.Println("file %v", err) //open file error
+	} else {
+		f, err := os.Create(dir) // create json file
+		if err != nil {
+			fmt.Println("file %v", err) // create file error
+			return err                  // return error
+		}
+		fmt.Println("file created : %v", f) // file created message
+		jsonSave(f, stract)                 // save json file
+	}
+	return f, error
+}
+
+func extractParams(r *http.Request) (int, string) {
+	path := strings.TrimPrefix(r.URL.Path, "/") // trim path
+	splited := strings.Split(oath, "/")         // split path
+	params := splited[0]                        // params is item
+	id, err := strconv.Atoi(splited[1])         // transform string to int
+	return id, params                           // return params and id
+}
+
+func handleFunc(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		id := r.URL.Query().Get("id")
-		mu.Lock()
-		item, ok := items[id]
-		mu.Unlock()
-		if ok {
-			json.NewEncoder(w).Encode(item)
-		} else {
-			http.NotFound(w, r)
-		}
-	case http.MethodPost:
-		var item Item
-		json.NewDecoder(r.Body).Decode(&item)
-		mu.Lock()
-		items[item.ID] = item
-		saveItems()
-		mu.Unlock()
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintf(w, "item created: %v %v %v", item.ID, item.Name, item.Price)
+		getItem(w, r) // get item
+	//case http.MethodPost:
+	//createItem(w, r) // create item
+	//case http.MethodPut:
+	//updateItem(w, r) // update item item = append(items[id, items]) // append items put
 	case http.MethodDelete:
-		id := r.URL.Query().Get("id")
-		mu.Lock()
-		delete(items, id)
-		saveItems()
-		mu.Unlock()
-		w.WriteHeader(http.StatusNoContent)
-		fmt.Fprintf(w, "item deleted : %v", id)
-	case http.MethodPut:
-		id := r.URL.Query().Get("id")
-		var item Item
-		json.NewDecoder(r.Body).Decode(&item)
-		mu.Lock()
-		items[id] = item
-		saveItems()
-		mu.Unlock()
-		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintf(w, "item updated: %v", item.ID, item.Name, item.Price)
+		deleteItem(w, r) // delete item
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // method not allowed
 	}
-}
-
-func loadItems() {
-	file, err := os.Open(dataFile)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	bytes, _ := os.ReadFile("./db/data.json")
-	json.Unmarshal(bytes, &items)
-}
-
-func saveItems() {
-	bytes, err := json.Marshal(items)
-	if err != nil {
-		panic(err)
-	}
-	os.WriteFile("./db/data.json", bytes, 0644)
 }
 
 func main() {
-	fmt.Println("sever start....")
-	http.HandleFunc("/items", itemsHandler)
-	http.ListenAndServe(":8080", nil)
+	var item Item
+	_, err := jsonCreate(jsonfile, item) // create json file
+	if err != nil {
+		log.Println("file %v", err) // create file error
+		panic(err)                  // panic error
+	}
+	var w http.ResponseWriter
+	var r *http.Request
+	handleFunc(w, r) // handle func
+
+	log.Println("Server Start", http.ListenAndServe(":8080", nil)) // start server
+	defer http.NoBody.Close()                                      // close server
 }
