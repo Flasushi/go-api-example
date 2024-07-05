@@ -58,27 +58,31 @@ func jsonSave(items map[int]Item, jsonfile string) {
 
 	err := os.WriteFile(jsonfile, bytes, 0644) // write file
 	if err != nil {
-		log.Println("file %v", err) // write file error
-		panic(err)                  // panic error
+		log.Println("file", err) // write file error
+		panic(err)               // panic error
 	}
 }
 
-func jsonCreate(jsonfile string, stract Item) (*os.File, error) {
+func jsonCreate(jsonfile string) *os.File {
 	mu.Lock()
 	defer mu.Unlock()
-	f, err := os.Create(jsonfile) // create json file
+
+	fstat, err := os.Stat(jsonfile) // read file
 	if err != nil {
-		log.Println("file %v", err) // create file error
-		panic(err)                  // panic error
-	} else {
-		log.Println("file %v", f) // create file success
-		f, err := os.Open(jsonfile)
+		_, err := os.Create(jsonfile) // create json file
 		if err != nil {
-			log.Println("file %v", err) // open file error
-			panic(err)                  // panic error
+			log.Println("file create error", err) // create file error
+			panic(err)                            // panic error
 		}
-		return f, err
 	}
+	log.Println("file name", os.DirFS(fstat.Name())) // stat file
+	file, err := os.Open(jsonfile)
+	if err != nil {
+		log.Println("aafile", err) // open file error
+		panic(err)                 // panic error
+	}
+	log.Println("file opened", file) // read file
+	return file
 }
 
 func extractParams(r *http.Request) (int, string) {
@@ -90,15 +94,8 @@ func extractParams(r *http.Request) (int, string) {
 }
 
 func main() {
-	var item Item
-
-	f, err := jsonCreate(jsonfile, item) // create json file
-	if err != nil {
-		log.Println("file %v", err) // create file error
-		panic(err)                  // panic error
-	}
-	defer f.Close() // defer close file
-
+	f := jsonCreate(jsonfile) // create json file
+	defer f.Close()           // defer close file
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
